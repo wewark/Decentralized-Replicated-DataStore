@@ -1,50 +1,83 @@
 import de.tum.in.www1.jReto.Connection;
 import de.tum.in.www1.jReto.LocalPeer;
 import de.tum.in.www1.jReto.RemotePeer;
+import de.tum.in.www1.jReto.connectivity.OutTransfer;
 import de.tum.in.www1.jReto.module.wlan.WlanModule;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
-import java.util.Scanner;
+import java.util.HashMap;
+import java.util.UUID;
 import java.util.concurrent.Executors;
 
 public class Node {
-	public static void main(String[] args) throws IOException {
-		WlanModule wlanModule = new WlanModule("myNet");
-		LocalPeer localPeer = new LocalPeer(Collections.singletonList(wlanModule), Executors.newSingleThreadExecutor());
+	private static Node ourInstance = new Node();
 
-		HashSet<RemotePeer> remotePeers = new HashSet<>();
+	public static Node getInstance() {
+		return ourInstance;
+	}
 
+	private WlanModule wlanModule;
+	private LocalPeer localPeer;
+
+	// Maps the unique identifier of each peer to its username
+	private HashMap<UUID, String> nodeUsername = new HashMap<>();
+
+	// Maps each username to its corresponding online remote peers
+	private HashMap<String, ArrayList<RemotePeer>> remotePeers = new HashMap<>();
+
+	private Node() {
+	}
+
+	private String username;
+
+	public void login(String username) {
+		this.username = username;
+		try {
+			wlanModule = new WlanModule("myNet");
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+
+		localPeer = new LocalPeer(Collections.singletonList(wlanModule), Executors.newSingleThreadExecutor());
 		localPeer.start(
-				discoveredPeer -> {
-					remotePeers.add(discoveredPeer);
-					System.out.println("Discovered peer: " + discoveredPeer);
-				},
+				this::discoverPeer,
 				removedPeer -> {
-					remotePeers.remove(removedPeer);
 					System.out.println("Removed peer: " + removedPeer);
 				},
-				(peer, incomingConnection) -> {
-					System.out.println("Received incoming connection: " + incomingConnection + " from peer: " + peer);
-					incomingConnection.setOnData((t, byteBuffer) -> System.out.println(new String(byteBuffer.array())));
-				}
+				this::incomingConnectionHandler
 		);
+	}
 
-		Scanner sc = new Scanner(System.in);
-		System.out.print("Name: ");
-		String name = sc.nextLine();
+	private void discoverPeer(RemotePeer discoveredPeer) {
+		System.out.println("Discovered peer: " + discoveredPeer);
+		sendMyUsername(discoveredPeer);
+	}
 
-		for (RemotePeer peer : remotePeers) {
-			Connection connection = peer.connect();
-			connection.setOnClose(connection1 -> System.out.println("Connection close."));
-//			connection.setOnData(((connection1, byteBuffer) -> {
-//				System.out.println("Receiving data...");
-//				System.out.println(new String(byteBuffer.array()));
-//			}));
-			connection.send(ByteBuffer.wrap(("Hello from " + name).getBytes()));
-			connection.close();
-		}
+	private void incomingConnectionHandler(RemotePeer peer, Connection incomingConnection) {
+		System.out.println("Received incoming connection: " + incomingConnection + " from peer: " + peer.getUniqueIdentifier());
+
+		if (!nodeUsername.containsKey(peer.getUniqueIdentifier()))
+			incomingConnection.setOnData((t, usernameBytes) -> setNodeUsername(peer, usernameBytes));
+	}
+
+	private void setNodeUsername(RemotePeer peer, ByteBuffer usernameBytes) {
+		String otherNodeUsername = new String(usernameBytes.array());
+		nodeUsername.put(peer.getUniqueIdentifier(), otherNodeUsername);
+
+		if (remotePeers.containsKey(otherNodeUsername))
+			remotePeers.get(otherNodeUsername).add(peer);
+		else
+			remotePeers.put(otherNodeUsername, new ArrayList<>());
+
+		System.out.println("User logged in: " + otherNodeUsername + ", " + peer.getUniqueIdentifier());
+	}
+
+	private void sendMyUsername(RemotePeer peer) {
+		Connection connection = peer.connect();
+		OutTransfer send = connection.send(ByteBuffer.wrap(username.getBytes()));
+		send.setOnComplete((t) -> connection.close());
 	}
 }
