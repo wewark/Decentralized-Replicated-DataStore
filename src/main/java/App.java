@@ -1,9 +1,10 @@
+import forms.LoginForm;
+
 import javax.swing.*;
 
 public class App {
 	public static void main(String[] args) {
-		JFrame frame = new JFrame("App");
-		frame.setContentPane(new LoginForm().panel1);
+		JFrame frame = new LoginForm();
 		frame.pack();
 		frame.setResizable(false);
 		frame.setVisible(true);

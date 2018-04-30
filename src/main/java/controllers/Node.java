@@ -1,3 +1,5 @@
+package controllers;
+
 import de.tum.in.www1.jReto.Connection;
 import de.tum.in.www1.jReto.LocalPeer;
 import de.tum.in.www1.jReto.RemotePeer;
@@ -6,6 +8,7 @@ import de.tum.in.www1.jReto.module.wlan.WlanModule;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.*;
+import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 
 public class Node {
@@ -26,8 +29,7 @@ public class Node {
 	// Maps each username to its corresponding online remote peers
 	private HashMap<String, ArrayList<RemotePeer>> remotePeers = new HashMap<>();
 
-	private Node() {
-	}
+	private Node() {}
 
 	private String username;
 
@@ -66,6 +68,7 @@ public class Node {
 	 * The first byte is the type of the data sent,
 	 * currently 0 means login, i.e "I am sending you my username"
 	 * the rest of the array is the data itself, serialized into bytes
+	 *
 	 * @param peer
 	 * @param data
 	 */
@@ -77,12 +80,17 @@ public class Node {
 		switch (msgType) {
 			case 0:
 				setNodeUsername(peer, bytes);
+				try {
+					updateUserList.call();
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
 				break;
 		}
 	}
 
 	private void setNodeUsername(RemotePeer peer, byte[] usernameBytes) {
-		String otherNodeUsername = (String) Helpers.deserialize(usernameBytes);
+		String otherNodeUsername = (String) controllers.Helpers.deserialize(usernameBytes);
 		nodeUsername.put(peer.getUniqueIdentifier(), otherNodeUsername);
 
 		if (remotePeers.containsKey(otherNodeUsername))
@@ -101,10 +109,25 @@ public class Node {
 		byte msgType = 0;
 		byte[] bytes = new byte[1];
 		bytes[0] = msgType;
-		bytes = Helpers.concatenate(bytes, Helpers.serialize(username));
+		bytes = controllers.Helpers.concatenate(bytes, controllers.Helpers.serialize(username));
 
 		connection.send(ByteBuffer.wrap(bytes));
 		connection.setOnClose(c -> System.out.println("Connection closed."));
 		//send.setOnComplete(c -> connection.close());
+	}
+
+	// A "function" that's is invoked to update GUI
+	private Callable<Void> updateUserList;
+
+	public void setUpdateUserList(Callable<Void> updateUserList) {
+		this.updateUserList = updateUserList;
+	}
+
+	public String[] getUsernames() {
+		String[] users = new String[username.length()];
+		int i = 0;
+		for (String user : remotePeers.keySet())
+			users[i++] = user;
+		return users;
 	}
 }
