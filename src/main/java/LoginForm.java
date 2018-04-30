@@ -7,8 +7,11 @@ public class LoginForm {
 
 	private Node node = Node.getInstance();
 
-	public LoginForm() {
+	LoginForm() {
 		loginButton.addActionListener(e -> {
+			node.login(usernameField.getText());
+		});
+		usernameField.addActionListener(e -> {
 			node.login(usernameField.getText());
 		});
 	}
