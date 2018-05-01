@@ -8,5 +8,6 @@ public class App {
 		frame.pack();
 		frame.setResizable(false);
 		frame.setVisible(true);
+		frame.setLocationRelativeTo(null);
 	}
 }

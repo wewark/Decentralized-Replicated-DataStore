@@ -24,6 +24,8 @@ public class LoginForm extends JFrame {
 		frame.pack();
 		frame.setResizable(false);
 		frame.setVisible(true);
+		frame.setLocationRelativeTo(null);
+		frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
 
 		dispose();
 	}

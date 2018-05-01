@@ -3,6 +3,7 @@ package controllers;
 import de.tum.in.www1.jReto.Connection;
 import de.tum.in.www1.jReto.LocalPeer;
 import de.tum.in.www1.jReto.RemotePeer;
+import de.tum.in.www1.jReto.connectivity.OutTransfer;
 import de.tum.in.www1.jReto.module.wlan.WlanModule;
 
 import java.io.IOException;
@@ -24,7 +25,7 @@ public class Node {
 	private Connection connection;
 
 	// Maps the unique identifier of each peer to its username
-	private HashMap<UUID, String> nodeUsername = new HashMap<>();
+	private HashMap<UUID, String> nodesUsernames = new HashMap<>();
 
 	// Maps each username to its corresponding online remote peers
 	private HashMap<String, ArrayList<RemotePeer>> remotePeers = new HashMap<>();
@@ -56,11 +57,17 @@ public class Node {
 
 	private void onPeerRemoved(RemotePeer removedPeer) {
 		System.out.println("Removed peer: " + removedPeer);
+		removeNodeUsername(removedPeer);
+		try {
+			updateUserList.call();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
 	}
 
 	private void onIncomingConnection(RemotePeer peer, Connection incomingConnection) {
 		System.out.println("Received incoming connection: " + incomingConnection + " from peer: " + peer.getUniqueIdentifier());
-		incomingConnection.setOnData((t, data) -> acceptData(peer, data));
+		incomingConnection.setOnData((c, data) -> acceptData(peer, data));
 	}
 
 	/**
@@ -90,30 +97,38 @@ public class Node {
 	}
 
 	private void setNodeUsername(RemotePeer peer, byte[] usernameBytes) {
-		String otherNodeUsername = (String) controllers.Helpers.deserialize(usernameBytes);
-		nodeUsername.put(peer.getUniqueIdentifier(), otherNodeUsername);
+		String nodeUsername = (String) controllers.Helpers.deserialize(usernameBytes);
+		nodesUsernames.put(peer.getUniqueIdentifier(), nodeUsername);
 
-		if (remotePeers.containsKey(otherNodeUsername))
-			remotePeers.get(otherNodeUsername).add(peer);
+		if (remotePeers.containsKey(nodeUsername))
+			remotePeers.get(nodeUsername).add(peer);
 		else
-			remotePeers.put(otherNodeUsername, new ArrayList<>());
+			remotePeers.put(nodeUsername, new ArrayList<>());
 
-		System.out.println("User logged in: " + otherNodeUsername + ", " + peer.getUniqueIdentifier());
+		System.out.println("User logged in: " + nodeUsername + ", " + peer.getUniqueIdentifier());
+	}
+
+	private void removeNodeUsername(RemotePeer peer) {
+		String nodeUsername = nodesUsernames.get(peer.getUniqueIdentifier());
+		remotePeers.get(nodeUsername).remove(peer);
+		if (remotePeers.get(nodeUsername).isEmpty())
+			remotePeers.remove(nodeUsername);
+		nodesUsernames.remove(peer.getUniqueIdentifier());
 	}
 
 	private void sendMyUsername(RemotePeer peer) {
 		connection = peer.connect();
 		connection.setOnConnect(c -> System.out.println("Connected!"));
-		connection.setOnError((c, e) -> c.attemptReconnect());
+		//connection.setOnError((c, e) -> c.attemptReconnect());
 
 		byte msgType = 0;
 		byte[] bytes = new byte[1];
 		bytes[0] = msgType;
 		bytes = controllers.Helpers.concatenate(bytes, controllers.Helpers.serialize(username));
 
-		connection.send(ByteBuffer.wrap(bytes));
+		OutTransfer send = connection.send(ByteBuffer.wrap(bytes));
 		connection.setOnClose(c -> System.out.println("Connection closed."));
-		//send.setOnComplete(c -> connection.close());
+		//send.setOnEnd(c -> connection.close());
 	}
 
 	// A "function" that's is invoked to update GUI
@@ -124,7 +139,7 @@ public class Node {
 	}
 
 	public String[] getUsernames() {
-		String[] users = new String[username.length()];
+		String[] users = new String[remotePeers.size()];
 		int i = 0;
 		for (String user : remotePeers.keySet())
 			users[i++] = user;
