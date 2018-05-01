@@ -3,8 +3,8 @@ package controllers;
 import de.tum.in.www1.jReto.Connection;
 import de.tum.in.www1.jReto.LocalPeer;
 import de.tum.in.www1.jReto.RemotePeer;
-import de.tum.in.www1.jReto.connectivity.OutTransfer;
 import de.tum.in.www1.jReto.module.wlan.WlanModule;
+import storage.FileManager;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -22,7 +22,8 @@ public class Node {
 	private WlanModule wlanModule;
 	private LocalPeer localPeer;
 
-	private Connection connection;
+	// Maps the unique identifier of each peer to its connection;
+	private HashMap<UUID, Connection> connections = new HashMap<>();
 
 	// Maps the unique identifier of each peer to its username
 	private HashMap<UUID, String> nodesUsernames = new HashMap<>();
@@ -30,12 +31,17 @@ public class Node {
 	// Maps each username to its corresponding online remote peers
 	private HashMap<String, ArrayList<RemotePeer>> remotePeers = new HashMap<>();
 
-	private Node() {}
+	private Node() {
+	}
 
 	private String username;
 
+	private FileManager fileManager;
+
 	public void login(String username) {
 		this.username = username;
+		fileManager = new FileManager(username);
+
 		try {
 			wlanModule = new WlanModule("myNet");
 		} catch (IOException e) {
@@ -70,6 +76,7 @@ public class Node {
 		incomingConnection.setOnData((c, data) -> acceptData(peer, data));
 	}
 
+
 	/**
 	 * The data will mainly be an array of bytes.
 	 * The first byte is the type of the data sent,
@@ -87,23 +94,41 @@ public class Node {
 		switch (msgType) {
 			case 0:
 				setNodeUsername(peer, bytes);
-				try {
-					updateUserList.call();
-				} catch (Exception e) {
-					e.printStackTrace();
-				}
 				break;
 		}
+	}
+
+	public void sendData(RemotePeer peer, byte[] data) {
+		Connection connection = connections.get(peer.getUniqueIdentifier());
+
+		if (connection == null) {
+			connection = connectTo(peer);
+			connections.put(peer.getUniqueIdentifier(), connection);
+		}
+
+		connection.send(ByteBuffer.wrap(data));
+	}
+
+	private Connection connectTo(RemotePeer peer) {
+		Connection connection = peer.connect();
+		connections.put(peer.getUniqueIdentifier(), connection);
+		connection.setOnClose(c -> System.out.println("Connection closed."));
+		return connection;
 	}
 
 	private void setNodeUsername(RemotePeer peer, byte[] usernameBytes) {
 		String nodeUsername = (String) controllers.Helpers.deserialize(usernameBytes);
 		nodesUsernames.put(peer.getUniqueIdentifier(), nodeUsername);
 
-		if (remotePeers.containsKey(nodeUsername))
-			remotePeers.get(nodeUsername).add(peer);
-		else
+		if (!remotePeers.containsKey(nodeUsername))
 			remotePeers.put(nodeUsername, new ArrayList<>());
+		remotePeers.get(nodeUsername).add(peer);
+
+		try {
+			updateUserList.call();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
 
 		System.out.println("User logged in: " + nodeUsername + ", " + peer.getUniqueIdentifier());
 	}
@@ -111,25 +136,22 @@ public class Node {
 	private void removeNodeUsername(RemotePeer peer) {
 		String nodeUsername = nodesUsernames.get(peer.getUniqueIdentifier());
 		remotePeers.get(nodeUsername).remove(peer);
+
 		if (remotePeers.get(nodeUsername).isEmpty())
 			remotePeers.remove(nodeUsername);
+
 		nodesUsernames.remove(peer.getUniqueIdentifier());
 	}
 
 	private void sendMyUsername(RemotePeer peer) {
-		connection = peer.connect();
-		connection.setOnConnect(c -> System.out.println("Connected!"));
-		//connection.setOnError((c, e) -> c.attemptReconnect());
-
 		byte msgType = 0;
 		byte[] bytes = new byte[1];
 		bytes[0] = msgType;
 		bytes = controllers.Helpers.concatenate(bytes, controllers.Helpers.serialize(username));
 
-		OutTransfer send = connection.send(ByteBuffer.wrap(bytes));
-		connection.setOnClose(c -> System.out.println("Connection closed."));
-		//send.setOnEnd(c -> connection.close());
+		sendData(peer, bytes);
 	}
+
 
 	// A "function" that's is invoked to update GUI
 	private Callable<Void> updateUserList;
@@ -144,5 +166,9 @@ public class Node {
 		for (String user : remotePeers.keySet())
 			users[i++] = user;
 		return users;
+	}
+
+	public void scanDirectory() {
+		fileManager.scan();
 	}
 }

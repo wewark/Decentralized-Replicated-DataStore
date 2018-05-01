@@ -7,6 +7,7 @@ import javax.swing.*;
 public class MainForm extends JFrame {
 	private JList userList;
 	private JPanel panel1;
+	private JButton syncButton;
 
 	private Node node = Node.getInstance();
 
@@ -20,6 +21,7 @@ public class MainForm extends JFrame {
 			updateUserList();
 			return null;
 		});
+		syncButton.addActionListener(e -> node.scanDirectory());
 	}
 
 	private void updateUserList() {
