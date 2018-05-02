@@ -38,6 +38,7 @@ public class Node {
 	// Maps each username to its corresponding online remote peers
 	private HashMap<String, ArrayList<RemotePeer>> remotePeers = new HashMap<>();
 
+	// Maps each UUID to its peer
 	private HashMap<UUID, RemotePeer> remotePeersUUID = new HashMap<>();
 
 	private Node() {
@@ -91,9 +92,15 @@ public class Node {
 	 * The first byte is the type of the data sent,
 	 * currently 0 means login, i.e "I am sending you my username"
 	 * the rest of the array is the data itself, serialized into bytes
+	 * <p>
+	 * msg types: TODO: Convert to enum
+	 * 1 -> Login
+	 * 2 -> Receive files list
+	 * 3 -> Receive file name
 	 *
-	 * @param peer
-	 * @param data
+	 * @param peer       The peer that sent the data
+	 * @param data       The data sent
+	 * @param connection The connection it was sent through
 	 */
 	private void acceptData(RemotePeer peer, ByteBuffer data, Connection connection) {
 		byte[] bytes = data.array();
@@ -114,14 +121,21 @@ public class Node {
 			// Receive file name
 			case 2:
 				String filename = new String(bytes);
-				connection.setOnTransfer((c, t) ->
-						receiveFile(c, t, filename)
-				);
-				connection.setOnData((c, t) -> {});
+				connection.setOnTransfer((c, t) -> {
+					receiveFile(peer, c, t, filename);
+					t.setOnEnd((tt) -> connection.setOnTransfer(null));
+				});
 		}
 	}
 
-	public void sendData(RemotePeer peer, byte[] data) {
+	/**
+	 * This function sends a msg or a small object, files are
+	 * sent through outTransfer
+	 *
+	 * @param peer The peer to send the data to
+	 * @param data The data in the form of byte array
+	 */
+	private void sendData(RemotePeer peer, byte[] data) {
 		Connection connection = connections.get(peer.getUniqueIdentifier());
 
 		if (connection == null) {
@@ -132,6 +146,7 @@ public class Node {
 		connection.send(ByteBuffer.wrap(data));
 	}
 
+	// Connects to a peer and returns the connection to be stored
 	private Connection connectTo(RemotePeer peer) {
 		Connection connection = peer.connect();
 		connections.put(peer.getUniqueIdentifier(), connection);
@@ -192,7 +207,7 @@ public class Node {
 	}
 
 	public void scanDirectory() {
-		fileManager.scan();
+		fileManager.sync();
 	}
 
 	/**
@@ -219,11 +234,11 @@ public class Node {
 		sendData(peer, data);
 
 		OutTransfer transfer = connection.send(fileSize,
-				(position, length) -> readData(fileChannel, position, length));
-		
+				(position, length) -> Helpers.readData(fileChannel, position, length));
+
 		transfer.setOnProgress(
 				t -> System.out.println("Progress: " + t.getProgress() + ", " + t.getLength()));
-		
+
 		transfer.setOnEnd(t -> {
 			try {
 				fileChannel.force(true);
@@ -234,29 +249,18 @@ public class Node {
 		});
 	}
 
-	private ByteBuffer readData(FileChannel fileChannel, int position, int length) {
-		ByteBuffer byteBuffer = ByteBuffer.allocate(length);
-		try {
-			fileChannel.read(byteBuffer, position);
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		byteBuffer.rewind();
-		return byteBuffer;
-	}
-
-	private void receiveFile(Connection connection, InTransfer inTransfer, String filename) {
+	private void receiveFile(RemotePeer peer, Connection connection, InTransfer inTransfer, String filename) {
 		FileChannel fileChannel = null;
 		try {
 			Path path = Paths.get(FileManager.mainDir, filename);
-			OpenOption[] read = { StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW };
+			OpenOption[] read = {StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW};
 			fileChannel = FileChannel.open(path, read);
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
 
 		FileChannel finalFileChannel = fileChannel;
-		inTransfer.setOnPartialData((t, data) -> writeData(finalFileChannel, data));
+		inTransfer.setOnPartialData((t, data) -> Helpers.writeData(finalFileChannel, data));
 		inTransfer.setOnProgress(
 				t -> System.out.println("Progress: " + t.getProgress() + ", " + t.getLength()));
 		inTransfer.setOnEnd(t -> {
@@ -267,13 +271,5 @@ public class Node {
 				e.printStackTrace();
 			}
 		});
-	}
-	
-	private void writeData(FileChannel fileChannel, ByteBuffer data) {
-		try {
-			fileChannel.write(data);
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
 	}
 }

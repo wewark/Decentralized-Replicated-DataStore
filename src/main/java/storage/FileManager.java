@@ -13,7 +13,7 @@ import java.util.HashMap;
 import java.util.UUID;
 
 public class FileManager {
-	public static String mainDir = System.getProperty("user.dir") + "/Data";
+	public static String mainDir = System.getProperty("user.dir") + "/Data2";
 	public String name;
 
 	public ArrayList<String> fileList = new ArrayList<>();
@@ -26,9 +26,10 @@ public class FileManager {
 	public FileManager(String name) {
 		this.name = name;
 		mainDir += "/" + name;
+		scan();
 	}
 
-	public void sendFileList() {
+	private void sendFileList() {
 		byte[] bytes = Helpers.serialize(fileList);
 		node.broadcastToUser(name, (byte) 1, bytes);
 	}
@@ -56,16 +57,20 @@ public class FileManager {
 		}
 	}
 
-	public void scan() {
+	public void sync() {
+		scan();
+		sendFileList();
+	}
+
+	private void scan() {
 		fileList.clear();
 		File file = new File(mainDir);
 		file.mkdir();
 		scan(file, "");
-		sendFileList();
 	}
 
 	// Recursive
-	public void scan(File file, String path) {
+	private void scan(File file, String path) {
 		if (file.isDirectory()) {
 			File[] files = file.listFiles();
 			for (File curFile : files) {

@@ -1,8 +1,14 @@
 package controllers;
 
 import java.io.*;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 
 public class Helpers {
+	/**
+	 * @param obj to be serialized, can be of any non-primitive type
+	 * @return obj serialized in the form of a byte array
+	 */
 	public static byte[] serialize(Object obj) {
 		ByteArrayOutputStream out = new ByteArrayOutputStream();
 		ObjectOutputStream os;
@@ -27,6 +33,7 @@ public class Helpers {
 		} catch (IOException | ClassNotFoundException e) {
 			e.printStackTrace();
 		}
+
 		return new Object();
 	}
 
@@ -38,5 +45,24 @@ public class Helpers {
 		for (byte cb : b)
 			ret[i++] = cb;
 		return ret;
+	}
+
+	public static void writeData(FileChannel fileChannel, ByteBuffer data) {
+		try {
+			fileChannel.write(data);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+
+	public static ByteBuffer readData(FileChannel fileChannel, int position, int length) {
+		ByteBuffer byteBuffer = ByteBuffer.allocate(length);
+		try {
+			fileChannel.read(byteBuffer, position);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		byteBuffer.rewind();
+		return byteBuffer;
 	}
 }
