@@ -37,6 +37,7 @@ public class Node {
 	private Node() {
 	}
 
+	// Username of the user currently logged in
 	private String username;
 
 	public FileManager fileManager;
@@ -59,6 +60,12 @@ public class Node {
 		);
 	}
 
+	/**
+	 * When a peer is discovered, create a new "peerConnection"
+	 * with it, then send it your username.
+	 *
+	 * @param discoveredPeer
+	 */
 	private void onPeerDiscovered(RemotePeer discoveredPeer) {
 		System.out.println("Discovered peer: " + discoveredPeer);
 		UUID peerUUID = discoveredPeer.getUniqueIdentifier();
@@ -70,21 +77,33 @@ public class Node {
 		sendMyUsername(discoveredPeer);
 	}
 
+	/**
+	 * When a peer has logged out, forget its username.
+	 *
+	 * @param removedPeer
+	 */
 	private void onPeerRemoved(RemotePeer removedPeer) {
 		System.out.println("Removed peer: " + removedPeer);
+
+		removeNodeUsername(removedPeer);
 
 		try {
 			updateUserList.call();
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
-
-		removeNodeUsername(removedPeer);
 	}
 
+	/**
+	 * When a new connection received, create or update your "peerConnection"
+	 * with its peer.
+	 *
+	 * @param peer
+	 * @param incomingConnection
+	 */
 	private void onIncomingConnection(RemotePeer peer, Connection incomingConnection) {
-		System.out.println("Received incoming connection: " + incomingConnection + " from peer: " + peer.getUniqueIdentifier());
 		UUID peerUUID = peer.getUniqueIdentifier();
+		System.out.println("Received incoming connection: " + incomingConnection + " from peer: " + peerUUID);
 
 		if (!connections.containsKey(peerUUID))
 			connections.put(peerUUID, new PeerConnection(peer));
@@ -92,8 +111,8 @@ public class Node {
 	}
 
 	/**
-	 * This function sends a msg or a small object, files are
-	 * sent through outTransfer
+	 * Sends a msg or a small object, files are
+	 * sent through outTransfer.
 	 *
 	 * @param peer The peer to send the data to
 	 * @param data The data in the form of byte array
@@ -147,6 +166,9 @@ public class Node {
 		this.updateUserList = updateUserList;
 	}
 
+	/**
+	 * @return Returns array of all online usernames.
+	 */
 	public String[] getUsernames() {
 		String[] users = new String[remotePeers.size()];
 		int i = 0;
@@ -174,6 +196,16 @@ public class Node {
 		}
 	}
 
+	/**
+	 * This function is basically a bridge from the file manager to "PeerConnnection",
+	 * it gets the "peerConnection" corresponding to this UIID and sends it the rest
+	 * of the parameters.
+	 *
+	 * @param peerUUID    UUID of the peer receiving the file.
+	 * @param fileChannel This is like a pointer that reads/writes a file by byte.
+	 * @param filename    To be sent before the actual file.
+	 * @param fileSize
+	 */
 	public void sendFile(UUID peerUUID, FileChannel fileChannel, String filename, int fileSize) {
 		PeerConnection connection = connections.get(peerUUID);
 		connection.sendFile(fileChannel, filename, fileSize);

@@ -16,12 +16,12 @@ import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 
 /**
- * Maintains a two-way connection between the local peer and a remote one
+ * Maintains a two-way connection between the local peer and a remote one.
  */
 public class PeerConnection {
 	private Node node = Node.getInstance();
 	private FileManager fileManager = node.fileManager;
-	
+
 	private RemotePeer remotePeer;
 	private Connection incomingConnection;
 	private Connection outGoingConnection;
@@ -47,7 +47,7 @@ public class PeerConnection {
 	 * 2 -> Receive files list
 	 * 3 -> Receive file name
 	 *
-	 * @param data       The data sent
+	 * @param data Received data.
 	 */
 	private void acceptData(ByteBuffer data) {
 		byte[] bytes = data.array();
@@ -85,17 +85,34 @@ public class PeerConnection {
 		outGoingConnection.send(ByteBuffer.wrap(data));
 	}
 
+	/**
+	 * First sends the name of the file, then starts transferring
+	 * the file itself.
+	 *
+	 * @param fileChannel This is like a pointer that reads/writes
+	 *                    a file byte by byte.
+	 * @param filename    The path of the file not just its name,
+	 *                    relative to the root directory.
+	 * @param fileSize
+	 */
 	public void sendFile(FileChannel fileChannel, String filename, int fileSize) {
+		// Send array [2, *filename in bytes* ]
+		// 2 is the msg type
 		byte[] data = {2};
 		data = Helpers.concatenate(data, filename.getBytes());
 		sendData(data);
 
+		// This "send()" function takes the file size
+		// and a data source to read from, it allows it
+		// to read and send the file in chunks.
 		OutTransfer transfer = outGoingConnection.send(fileSize,
 				(position, length) -> Helpers.readData(fileChannel, position, length));
 
+		// Loading bar
 		transfer.setOnProgress(
 				t -> System.out.println("Progress: " + t.getProgress() + ", " + t.getLength()));
 
+		// When transfer ends, close the file channel
 		transfer.setOnEnd(t -> {
 			try {
 				fileChannel.force(true);
@@ -106,6 +123,15 @@ public class PeerConnection {
 		});
 	}
 
+	/**
+	 * This function is invoked when a file transfer is started,
+	 * it creates a file channel that creates a new file with that
+	 * filename and starts writing to it as it receives chunks of data.
+	 *
+	 * @param inTransfer
+	 * @param filename   The path of the file not just its name,
+	 *                   relative to the root directory.
+	 */
 	private void receiveFile(InTransfer inTransfer, String filename) {
 		FileChannel fileChannel = null;
 		try {
@@ -119,13 +145,19 @@ public class PeerConnection {
 			e.printStackTrace();
 		}
 
+		// CLion just wanted me to create this lol
+		// because of "final" bla bla
 		FileChannel finalFileChannel = fileChannel;
+
+		// When a chunk of data is received, write it.
 		inTransfer.setOnPartialData(
 				(t, data) -> Helpers.writeData(finalFileChannel, data));
 
+		// Loading bar
 		inTransfer.setOnProgress(
 				t -> System.out.println("Progress: " + t.getProgress() + ", " + t.getLength()));
 
+		// When transfer ends, close the file channel
 		inTransfer.setOnEnd(t -> {
 			try {
 				finalFileChannel.force(true);
