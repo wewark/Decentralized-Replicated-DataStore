@@ -45,15 +45,23 @@ public class FileManager {
 		}
 	}
 
-	private void compareWithPeer(UUID peerUUID) throws Exception {
+	private void compareWithPeer(UUID peerUUID) {
 		// difference contains all the files that I have but this peer doesn't have
 		ArrayList<String> difference = (ArrayList<String>) fileList.clone();
 		difference.removeAll(peerFileLists.get(peerUUID));
 
-		for (String file : difference) {
-			Path path = Paths.get(mainDir, file);
+		for (String file : difference)
+			sendFile(peerUUID, file);
+	}
+
+	private void sendFile(UUID peerUUID, String filePath) {
+		try {
+			Path path = Paths.get(mainDir, filePath);
 			FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.READ);
-			node.sendFile(peerUUID, fileChannel, file, (int) fileChannel.size());
+			node.sendFile(peerUUID, fileChannel, filePath, (int) fileChannel.size());
+		}
+		catch (Exception e) {
+			e.printStackTrace();
 		}
 	}
 
