@@ -1,5 +1,6 @@
 package storage;
 
+import com.sun.nio.file.ExtendedWatchEventModifier;
 import controllers.Helpers;
 import controllers.Node;
 
@@ -38,10 +39,10 @@ public class FileManager {
 	 * "file_fel_root.mp3"
 	 * }
 	 */
-	public List<String> fileList;
+	public Collection<String> fileList;
 
 	// The file lists of the other computers I am logged in
-	public Map<UUID, ArrayList<String>> peerFileLists;
+	public Map<UUID, Collection<String>> peerFileLists;
 
 	private Node node;
 
@@ -49,7 +50,7 @@ public class FileManager {
 
 	public FileManager(String username) {
 		this.username = username;
-		this.fileList = new ArrayList<>();
+		this.fileList = new HashSet<>();
 		this.peerFileLists = new HashMap<>();
 		this.node = Node.getInstance();
 
@@ -83,7 +84,7 @@ public class FileManager {
 	 * @param data     The serialized file list
 	 */
 	public void receiveFileList(UUID peerUUID, byte[] data) {
-		ArrayList<String> fileList = (ArrayList<String>) Helpers.deserialize(data);
+		Collection<String> fileList = (Collection<String>) Helpers.deserialize(data);
 		peerFileLists.put(peerUUID, fileList);
 		try {
 			sendFiles(peerUUID, compareWithPeer(peerUUID));
@@ -141,14 +142,19 @@ public class FileManager {
 	 * it currently feels the existence of files only, not the changes.
 	 */
 	public synchronized void commitChanges() {
-		fileList.clear();
 		File file = new File(mainDir);
 
 		// Create the root directory if it doesn't exist
 		if(!file.exists())
 			file.mkdirs();
 
-		scan(file, "");
+		Collection<String> newPaths = new ArrayList<>();
+
+		scan(file, "", newPaths);
+
+		//Print new Files
+		for (String newFilePath : newPaths)
+			System.out.println("Added new file: " + newFilePath);
 	}
 
 	/**
@@ -157,18 +163,32 @@ public class FileManager {
 	 * of each file in "fileList".
 	 *
 	 * @param file Starts recurring from that file
-	 * @param path The path relative to the root directory,
+	 * @param rootPath The path relative to the root directory,
 	 *             it starts as "/" and gets manually built.
 	 */
-	private void scan(File file, String path) {
+	private void scan(File file, String rootPath, Collection<String> newPaths) {
+		String relativePath = rootPath + "/" + file.getName();
+
+		//If file is a Directory/Folder, explore it.
 		if (file.isDirectory()) {
 			File[] files = file.listFiles();
 			for (File curFile : files) {
-				scan(curFile, path);
+				if(curFile.isDirectory())
+					scan(curFile, rootPath, newPaths);
+				else
+					scan(curFile, relativePath, newPaths);
 			}
-		} else {
-			System.out.println("File: " + path + "/" + file.getName());
-			fileList.add(path + "/" + file.getName());
+		}
+		//If file is a... file. check if it new/old.
+		else
+		{
+
+			if (fileList.contains(relativePath))
+				return;
+
+			//Add new found file
+			fileList.add(relativePath);
+			newPaths.add(relativePath);
 		}
 	}
 
@@ -182,13 +202,20 @@ public class FileManager {
 		root = System.getProperty("user.dir") + "/" + directory;
 	}
 
+
 	public void watchDirectoryPath(String pathString) {
+		//TODO make it better.
 		File file = new File(pathString);
 		Path pathToWatch = file.toPath();
 		try {
 			WatchService watchService = pathToWatch.getFileSystem().newWatchService();
-			pathToWatch.register(watchService, StandardWatchEventKinds.ENTRY_CREATE,
-					StandardWatchEventKinds.ENTRY_MODIFY, StandardWatchEventKinds.ENTRY_DELETE);
+
+			WatchEvent.Kind[] standardEventsArray = {
+					StandardWatchEventKinds.ENTRY_CREATE,
+					StandardWatchEventKinds.ENTRY_MODIFY,
+					StandardWatchEventKinds.ENTRY_DELETE};
+
+			pathToWatch.register(watchService, standardEventsArray, ExtendedWatchEventModifier.FILE_TREE);
 
 			// loop forever to watch directory
 			while (true) {
@@ -229,5 +256,7 @@ public class FileManager {
 			return;
 		}
 	}
+
+
 
 }

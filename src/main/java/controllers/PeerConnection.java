@@ -136,6 +136,10 @@ public class PeerConnection {
 		FileChannel fileChannel = null;
 		try {
 			Path path = Paths.get(FileManager.mainDir, filename);
+
+			//Create Directories if doesn't exist.
+			path.getParent().toFile().mkdirs();
+
 			OpenOption[] read = {
 					StandardOpenOption.WRITE,
 					StandardOpenOption.CREATE_NEW
