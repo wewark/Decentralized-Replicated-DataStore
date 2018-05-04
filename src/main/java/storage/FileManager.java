@@ -22,15 +22,16 @@ import java.util.stream.Collectors;
  * away from the connection logic.
  */
 public class FileManager {
-
-	//TODO MAKE SINGLETON
+	private static FileManager instance;
 
 	// The root directory
-	public static String root = System.getProperty("user.dir") + "/Data";
+	private static String root = System.getProperty("user.dir") + "/Data";
 
-	public static String mainDir;
+	// The user directory
+	private String userDir;
+
 	// Username of the current user, used to username the root directory
-	public String username;
+	private String username;
 
 	/**
 	 * Stores the paths of all the current existing files.
@@ -39,35 +40,51 @@ public class FileManager {
 	 * "file_fel_root.mp3"
 	 * }
 	 */
-	public Collection<String> fileList;
+	private Collection<String> fileList;
 
 	// The file lists of the other computers I am logged in
-	public Map<UUID, Collection<String>> peerFileLists;
+	private Map<UUID, Collection<String>> peerFileLists;
 
 	private Node node;
 
 	private Thread watcherThread;
 
-	public FileManager(String username) {
-		this.username = username;
+	private FileManager() {
 		this.fileList = new HashSet<>();
 		this.peerFileLists = new HashMap<>();
 		this.node = Node.getInstance();
+		this.username = node.getUsername();
 
 		//set new dir.
-		mainDir = root + "/" + username;
+		this.userDir = root + "/" + username;
 
 		//create directories if doesn't exist yet (if 1st run)
-		File directory = new File(mainDir);
+		File directory = new File(userDir);
 		if(!directory.exists())
 			directory.mkdirs();
 
 		//Start thread.
-		Thread thread = new Thread(() -> watchDirectoryPath(FileManager.mainDir));
-		thread.start();
+		watcherThread = new Thread(() -> watchDirectoryPath(userDir));
+		watcherThread.start();
 
 		//populate fileLists.
 		checkout();
+	}
+
+	public synchronized static FileManager getInstance() {
+		if(instance == null)
+			return instance = new FileManager();
+		return instance;
+	}
+
+	/**
+	 * Dev Utility to develop instances on the same PC.
+	*/
+	public static void setRootDir(){
+		//DEV CODE
+		Scanner sc = new Scanner(System.in);
+		String directory = sc.nextLine();
+		root = System.getProperty("user.dir") + "/" + directory;
 	}
 
 	/**
@@ -116,11 +133,11 @@ public class FileManager {
 	 *
 	 * @param peerUUID UUID of the other peer.
 	 * @param filePath Path of the file to be sent, relative to the root directory,
-	 *                 notice it gets appended to "mainDir".
+	 *                 notice it gets appended to "userDir".
 	 */
 	private void sendFile(UUID peerUUID, String filePath) {
 		try {
-			Path path = Paths.get(mainDir, filePath);
+			Path path = Paths.get(userDir, filePath);
 			FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.READ);
 			node.sendFile(peerUUID, fileChannel, filePath, (int) fileChannel.size());
 		} catch (Exception e) {
@@ -145,7 +162,7 @@ public class FileManager {
 	 * it currently feels the existence of files only, not the changes.
 	 */
 	public synchronized void checkout() {
-		File file = new File(mainDir);
+		File file = new File(userDir);
 
 		// Create the root directory if it doesn't exist
 		if(!file.exists())
@@ -161,7 +178,7 @@ public class FileManager {
 			System.out.println("Checked file: " + newFilePath);
 		}
 
-		System.out.println("All files are checked-out and updated!");
+		System.out.println("All files are checked-out and updated! Total: " + fileList.size() + " file.");
 	}
 
 	/**
@@ -176,36 +193,25 @@ public class FileManager {
 	private void scan(File file, String rootPath, Collection<String> newPaths) {
 		String relativePath = rootPath + "/" + file.getName();
 
-		//If file is a Directory/Folder, explore it.
-		if (file.isDirectory()) {
-			File[] files = file.listFiles();
-			for (File curFile : files) {
-				if(curFile.isDirectory())
-					scan(curFile, rootPath, newPaths);
-				else
-					scan(curFile, relativePath, newPaths);
+		File[] files = file.listFiles();
+
+		for (File curFile : files) {
+
+			//If file is a Directory/Folder, recurse and explore it.
+			if (curFile.isDirectory())
+				scan(curFile, relativePath, newPaths);
+
+			//If file is a... file. check if it new/old.
+			else {
+				String fileRelativePath = relativePath + "/" + curFile.getName();
+
+				if (fileList.contains(fileRelativePath))
+					return;
+
+				//Add new found file
+				newPaths.add(fileRelativePath);
 			}
 		}
-		//If file is a... file. check if it new/old.
-		else
-		{
-
-			if (fileList.contains(relativePath))
-				return;
-
-			//Add new found file
-			newPaths.add(relativePath);
-		}
-	}
-
-	/**
-	 * Dev Utility to develop instances on the same PC.
-	*/
-	public static void setRootDir(){
-		//DEV CODE
-		Scanner sc = new Scanner(System.in);
-		String directory = sc.nextLine();
-		root = System.getProperty("user.dir") + "/" + directory;
 	}
 
 	public void watchDirectoryPath(String pathString) {
@@ -240,7 +246,7 @@ public class FileManager {
 				for (final WatchEvent<?> event : watchKey.pollEvents()) {
 					if(event.kind() == StandardWatchEventKinds.ENTRY_CREATE){
 						String relativePath = event.context().toString();
-						File newFile = new File(mainDir, event.context().toString());
+						File newFile = new File(userDir, event.context().toString());
 						if(!newFile.isDirectory()) {
 							addToFileList(relativePath);
 							System.out.println("File Created! Added: " + relativePath);
@@ -274,5 +280,24 @@ public class FileManager {
 
 	public synchronized void addToFileList(String path){
 		fileList.add(path);
+	}
+
+
+	//SETTERS & GETTERS
+
+	public String getUserDir() {
+		return userDir;
+	}
+
+	public void setUserDir(String userDir) {
+		this.userDir = userDir;
+	}
+
+	public String getUsername() {
+		return username;
+	}
+
+	public void setUsername(String username) {
+		this.username = username;
 	}
 }

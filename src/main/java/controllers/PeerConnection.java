@@ -135,7 +135,7 @@ public class PeerConnection {
 	private void receiveFile(InTransfer inTransfer, String filename) {
 		FileChannel fileChannel = null;
 		try {
-			Path path = Paths.get(FileManager.mainDir, filename);
+			Path path = Paths.get(FileManager.getInstance().getUserDir(), filename);
 
 			//Create Directories if doesn't exist.
 			path.getParent().toFile().mkdirs();

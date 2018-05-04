@@ -1,11 +1,9 @@
 package controllers;
-
 import de.tum.in.www1.jReto.Connection;
 import de.tum.in.www1.jReto.LocalPeer;
 import de.tum.in.www1.jReto.RemotePeer;
 import de.tum.in.www1.jReto.module.wlan.WlanModule;
 import storage.FileManager;
-
 import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
@@ -34,18 +32,18 @@ public class Node {
 	// Maps each username to its corresponding online remote peers
 	private HashMap<String, ArrayList<RemotePeer>> remotePeers = new HashMap<>();
 
-	private Node() {
-	}
+	private Node() {}
 
 	// Username of the user currently logged in
-	private String username;
+	private String username = "guest username";
 
 	public FileManager fileManager;
+
 
 	public void login(String username) {
 		this.username = username;
 
-		fileManager = new FileManager(username);
+		fileManager = FileManager.getInstance();
 
 		try {
 			wlanModule = new WlanModule("myNet");
@@ -176,6 +174,14 @@ public class Node {
 		for (String user : remotePeers.keySet())
 			users[i++] = user;
 		return users;
+	}
+
+	public String getUsername() {
+		return username;
+	}
+
+	public void setUsername(String username) {
+		this.username = username;
 	}
 
 	public void scanDirectory() {
