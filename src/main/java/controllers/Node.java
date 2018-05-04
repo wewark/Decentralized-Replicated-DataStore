@@ -44,7 +44,12 @@ public class Node {
 
 	public void login(String username) {
 		this.username = username;
+
 		fileManager = new FileManager(username);
+
+		//Start thread.
+		Thread thread = new Thread(() -> fileManager.watchDirectoryPath(FileManager.mainDir));
+		thread.start();
 
 		try {
 			wlanModule = new WlanModule("myNet");
@@ -179,6 +184,10 @@ public class Node {
 
 	public void scanDirectory() {
 		fileManager.sync();
+	}
+
+	public void commitChanges() {
+		fileManager.commitChanges();
 	}
 
 	/**
