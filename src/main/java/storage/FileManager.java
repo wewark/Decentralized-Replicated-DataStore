@@ -8,9 +8,8 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * The main file structure is
@@ -23,11 +22,16 @@ import java.util.UUID;
  * away from the connection logic.
  */
 public class FileManager {
-	// The root directory
-	public static String mainDir = System.getProperty("user.dir") + "/Data";
 
-	// Username of the current user, used to name the root directory
-	public String name;
+	//TODO MAKE SINGLETON
+
+	// The root directory
+	public static String root = System.getProperty("user.dir") + "/Data";
+
+	public static String mainDir;
+
+	// Username of the current user, used to username the root directory
+	public String username;
 
 	/**
 	 * Stores the paths of all the current existing files.
@@ -36,16 +40,28 @@ public class FileManager {
 	 * "file_fel_root.mp3"
 	 * }
 	 */
-	public ArrayList<String> fileList = new ArrayList<>();
+	public List<String> fileList;
 
 	// The file lists of the other computers I am logged in
-	public HashMap<UUID, ArrayList<String>> peerFileLists = new HashMap<>();
+	public Map<UUID, ArrayList<String>> peerFileLists;
 
-	private Node node = Node.getInstance();
+	private Node node;
 
-	public FileManager(String name) {
-		this.name = name;
-		mainDir += "/" + name;
+	public FileManager(String username) {
+		this.username = username;
+		this.fileList = new ArrayList<>();
+		this.peerFileLists = new HashMap<>();
+		this.node = Node.getInstance();
+
+		//set new dir.
+		mainDir = root + "/" + username;
+
+		//create directories if doesn't exist yet (if 1st run)
+		File directory = new File(mainDir);
+		if(!directory.exists())
+			directory.mkdirs();
+
+		//populate fileLists.
 		scan();
 	}
 
@@ -55,7 +71,7 @@ public class FileManager {
 	 */
 	private void sendFileList() {
 		byte[] bytes = Helpers.serialize(fileList);
-		node.broadcastToUser(name, (byte) 1, bytes);
+		node.broadcastToUser(username, (byte) 1, bytes);
 	}
 
 	/**
@@ -69,9 +85,9 @@ public class FileManager {
 	public void receiveFileList(UUID peerUUID, byte[] data) {
 		ArrayList<String> fileList = (ArrayList<String>) Helpers.deserialize(data);
 		peerFileLists.put(peerUUID, fileList);
-
 		try {
-			compareWithPeer(peerUUID);
+			//TODO decompose
+			sendFiles(peerUUID, compareWithPeer(peerUUID));
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -86,13 +102,9 @@ public class FileManager {
 	 *
 	 * @param peerUUID UUID of the other peer.
 	 */
-	private void compareWithPeer(UUID peerUUID) {
+	private List<String> compareWithPeer(UUID peerUUID) {
 		// difference contains all the files that I have but this peer doesn't have
-		ArrayList<String> difference = (ArrayList<String>) fileList.clone();
-		difference.removeAll(peerFileLists.get(peerUUID));
-
-		for (String file : difference)
-			sendFile(peerUUID, file);
+		return fileList.stream().filter(x -> !peerFileLists.get(peerUUID).contains(x)).collect(Collectors.toList());
 	}
 
 	/**
@@ -110,6 +122,11 @@ public class FileManager {
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
+	}
+
+	private void sendFiles(UUID peerUUID, List<String> filePaths){
+		for (String filePath : filePaths)
+			sendFile(peerUUID, filePath);
 	}
 
 	/**
@@ -139,7 +156,7 @@ public class FileManager {
 	 * stores the relative path (relative to the root folder)
 	 * of each file in "fileList".
 	 *
-	 * @param file Starts recursing from that file
+	 * @param file Starts recurring from that file
 	 * @param path The path relative to the root directory,
 	 *             it starts as "/" and gets manually built.
 	 */
@@ -153,5 +170,15 @@ public class FileManager {
 			System.out.println("File: " + path + "/" + file.getName());
 			fileList.add(path + "/" + file.getName());
 		}
+	}
+
+	/*
+		Dev Utility to develop instances on the same PC.
+	*/
+	public static void setRootDir(){
+		//DEV CODE
+		Scanner sc = new Scanner(System.in);
+		String directory = sc.nextLine();
+		root = System.getProperty("user.dir") + "/" + directory;
 	}
 }
