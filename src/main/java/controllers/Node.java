@@ -47,10 +47,6 @@ public class Node {
 
 		fileManager = new FileManager(username);
 
-		//Start thread.
-		Thread thread = new Thread(() -> fileManager.watchDirectoryPath(FileManager.mainDir));
-		thread.start();
-
 		try {
 			wlanModule = new WlanModule("myNet");
 		} catch (IOException e) {
@@ -187,7 +183,7 @@ public class Node {
 	}
 
 	public void commitChanges() {
-		fileManager.commitChanges();
+		fileManager.checkout();
 	}
 
 	/**

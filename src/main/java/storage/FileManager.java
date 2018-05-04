@@ -62,8 +62,12 @@ public class FileManager {
 		if(!directory.exists())
 			directory.mkdirs();
 
+		//Start thread.
+		Thread thread = new Thread(() -> watchDirectoryPath(FileManager.mainDir));
+		thread.start();
+
 		//populate fileLists.
-		commitChanges();
+		checkout();
 	}
 
 	/**
@@ -124,7 +128,6 @@ public class FileManager {
 		}
 	}
 
-
 	private void sendFiles(UUID peerUUID, List<String> filePaths){
 		for (String filePath : filePaths)
 			sendFile(peerUUID, filePath);
@@ -141,7 +144,7 @@ public class FileManager {
 	 * Non-recursive function, scans the root directory for new files,
 	 * it currently feels the existence of files only, not the changes.
 	 */
-	public synchronized void commitChanges() {
+	public synchronized void checkout() {
 		File file = new File(mainDir);
 
 		// Create the root directory if it doesn't exist
@@ -153,8 +156,12 @@ public class FileManager {
 		scan(file, "", newPaths);
 
 		//Print new Files
-		for (String newFilePath : newPaths)
-			System.out.println("Added new file: " + newFilePath);
+		for (String newFilePath : newPaths) {
+			addToFileList(newFilePath);
+			System.out.println("Checked file: " + newFilePath);
+		}
+
+		System.out.println("All files are checked-out and updated!");
 	}
 
 	/**
@@ -187,7 +194,6 @@ public class FileManager {
 				return;
 
 			//Add new found file
-			fileList.add(relativePath);
 			newPaths.add(relativePath);
 		}
 	}
@@ -201,7 +207,6 @@ public class FileManager {
 		String directory = sc.nextLine();
 		root = System.getProperty("user.dir") + "/" + directory;
 	}
-
 
 	public void watchDirectoryPath(String pathString) {
 		//TODO make it better.
@@ -234,8 +239,12 @@ public class FileManager {
 				// Poll for file system events on the WatchKey
 				for (final WatchEvent<?> event : watchKey.pollEvents()) {
 					if(event.kind() == StandardWatchEventKinds.ENTRY_CREATE){
-						System.out.println("File Created!, Committing Changes...");
-						commitChanges();
+						String relativePath = event.context().toString();
+						File newFile = new File(mainDir, event.context().toString());
+						if(!newFile.isDirectory()) {
+							addToFileList(relativePath);
+							System.out.println("File Created! Added: " + relativePath);
+						}
 					}
 					//TODO Add for ENTRY_DELETE and for ENTRY_MODIFY
 				}
@@ -249,14 +258,21 @@ public class FileManager {
 			}
 
 		} catch (InterruptedException ex) {
-			System.out.println("Directory Watcher Thread interrupted");
+			System.out.println("Directory Watcher Thread interrupted, Closing.");
 			return;
 		} catch (IOException ex) {
-			ex.printStackTrace();  // Loggin framework
+			ex.printStackTrace();
 			return;
 		}
 	}
 
+	@Override
+	protected void finalize() throws Throwable {
+		if(watcherThread.isAlive())
+			watcherThread.interrupt();
+	}
 
-
+	public synchronized void addToFileList(String path){
+		fileList.add(path);
+	}
 }

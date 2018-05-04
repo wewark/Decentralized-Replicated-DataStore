@@ -19,14 +19,12 @@ public class LoginForm extends JFrame {
 
 	private void login() {
 		node.login(usernameField.getText());
-
 		JFrame frame = new MainForm();
 		frame.pack();
 		frame.setResizable(false);
 		frame.setVisible(true);
 		frame.setLocationRelativeTo(null);
 		frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
-
 		dispose();
 	}
 }
