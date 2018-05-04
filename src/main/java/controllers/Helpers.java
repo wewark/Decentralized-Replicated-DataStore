@@ -43,6 +43,8 @@ public class Helpers {
 	}
 
 	public static byte[] concatenate(byte[] a, byte[] b) {
+		//TODO, this potentially need double the size of the file in RAM just to add a single byte ? man this is bad! :'D
+		//TODO FIND A WORKAROUND.
 		byte[] ret = new byte[a.length + b.length];
 		int i = 0;
 		for (byte cb : a)

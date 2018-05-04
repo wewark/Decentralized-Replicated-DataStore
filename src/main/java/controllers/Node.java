@@ -21,6 +21,7 @@ public class Node {
 	}
 
 	private WlanModule wlanModule;
+
 	private LocalPeer localPeer;
 
 	// Maps the unique identifier of each peer to its connection;
@@ -200,7 +201,8 @@ public class Node {
 	 * @param data
 	 */
 	public void broadcastToUser(String username, byte msgType, byte[] data) {
-		if (!remotePeers.containsKey(username)) return;
+		if (!remotePeers.containsKey(username))
+			return;
 		data = Helpers.concatenate(new byte[]{msgType}, data);
 		for (RemotePeer peer : remotePeers.get(username)) {
 			sendData(peer, data);
@@ -220,5 +222,9 @@ public class Node {
 	public void sendFile(UUID peerUUID, FileChannel fileChannel, String filename, int fileSize) {
 		PeerConnection connection = connections.get(peerUUID);
 		connection.sendFile(fileChannel, filename, fileSize);
+	}
+
+	public HashMap<String, ArrayList<RemotePeer>> getRemotePeers() {
+		return remotePeers;
 	}
 }

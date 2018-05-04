@@ -21,7 +21,6 @@ import java.util.Arrays;
 public class PeerConnection {
 	private Node node = Node.getInstance();
 	private FileManager fileManager = node.fileManager;
-
 	private RemotePeer remotePeer;
 	private Connection incomingConnection;
 	private Connection outGoingConnection;
@@ -68,6 +67,10 @@ public class PeerConnection {
 			// Receive file name
 			case 2:
 				String filename = new String(bytes);
+
+				//Add files received via network to this list (so it won't be re-broadcast-ed by the watcher).
+				fileManager.getReceivedFiles().add(filename);
+
 				incomingConnection.setOnTransfer((c, t) -> {
 					receiveFile(t, filename);
 					t.setOnEnd((tt) -> incomingConnection.setOnTransfer(null));

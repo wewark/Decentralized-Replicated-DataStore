@@ -3,6 +3,7 @@ package storage;
 import com.sun.nio.file.ExtendedWatchEventModifier;
 import controllers.Helpers;
 import controllers.Node;
+import de.tum.in.www1.jReto.RemotePeer;
 
 import java.io.File;
 import java.io.IOException;
@@ -42,6 +43,10 @@ public class FileManager {
 	 */
 	private Collection<String> fileList;
 
+	/**
+	 * Holds all files received via the current session (to avoid resending them again by the watcher) */
+	private Collection<String> receivedFiles;
+
 	// The file lists of the other computers I am logged in
 	private Map<UUID, Collection<String>> peerFileLists;
 
@@ -52,6 +57,7 @@ public class FileManager {
 	private FileManager() {
 		this.fileList = new HashSet<>();
 		this.peerFileLists = new HashMap<>();
+		this.receivedFiles = new HashSet<>();
 		this.node = Node.getInstance();
 		this.username = node.getUsername();
 
@@ -150,11 +156,28 @@ public class FileManager {
 			sendFile(peerUUID, filePath);
 	}
 
+	// Send filePath to all online peers.
+	private void broadcastFile(String filePath){
+		List<RemotePeer> peerList = node.getRemotePeers().get(username);
+		for (RemotePeer remotePeer : peerList) {
+			sendFile(remotePeer.getUniqueIdentifier(), filePath);
+		}
+	}
+
+	// Send all file-paths to all online peers.
+	private void broadcastFiles(List<String> filePaths){
+		List<RemotePeer> peerList = node.getRemotePeers().get(username);
+		for (RemotePeer remotePeer : peerList) {
+				sendFiles(remotePeer.getUniqueIdentifier(), filePaths);
+		}
+	}
+
 	/**
 	 * Broadcast your fileList to all peers, by-which they're going to send you their last committed files.
 	 */
 	public synchronized void sync() {
 		sendFileList();
+		System.out.println("Synchronization Successful!");
 	}
 
 	/**
@@ -178,7 +201,7 @@ public class FileManager {
 			System.out.println("Checked file: " + newFilePath);
 		}
 
-		System.out.println("All files are checked-out and updated! Total: " + fileList.size() + " file.");
+		System.out.println("All files are checked-out and updated! Total: " + fileList.size() + " files.");
 	}
 
 	/**
@@ -191,20 +214,18 @@ public class FileManager {
 	 *             it starts as "/" and gets manually built.
 	 */
 	private void scan(File file, String rootPath, Collection<String> newPaths) {
-		String relativePath = rootPath + "/" + file.getName();
-
 		File[] files = file.listFiles();
 
 		for (File curFile : files) {
 
+			String fileRelativePath = rootPath + "/" + curFile.getName();
+
 			//If file is a Directory/Folder, recurse and explore it.
 			if (curFile.isDirectory())
-				scan(curFile, relativePath, newPaths);
+				scan(curFile, fileRelativePath, newPaths);
 
 			//If file is a... file. check if it new/old.
 			else {
-				String fileRelativePath = relativePath + "/" + curFile.getName();
-
 				if (fileList.contains(fileRelativePath))
 					return;
 
@@ -214,10 +235,38 @@ public class FileManager {
 		}
 	}
 
-	public void watchDirectoryPath(String pathString) {
-		//TODO make it better.
-		File file = new File(pathString);
-		Path pathToWatch = file.toPath();
+	//Called when Directory watcher detects a new created file.
+	private void watcherCreatedFile(String relativePath){
+		File newFile = new File(userDir,relativePath);
+		if(!newFile.isDirectory()) {
+			//Check if file is not created by an another peer push ( so that no-need to broadcast it back)
+			if(!receivedFiles.contains(relativePath)) {
+				//if not received it means it's a new file! -> print and broadcast.
+				System.out.println("File Created! Added: " + relativePath);
+
+				System.out.println("Broadcasting File: '" + newFile.getName() + "' to all online peers...");
+
+				broadcastFile(relativePath);
+
+				System.out.println("File broadcast-ed to all peers!");
+			}
+			else
+			{
+				System.out.println("File Received! Added: " + relativePath);
+				addToFileList(relativePath);
+			}
+		}
+	};
+
+	//TODO - Called when Directory watcher detects modify change.
+	private void watcherModifiedFile(){};
+
+	//TODO - Called when Directory watcher detects a file deletion
+	private void watcherDeletedFile(){};
+
+
+	private void watchDirectoryPath(String pathString) {
+		Path pathToWatch = Paths.get(pathString);
 		try {
 			WatchService watchService = pathToWatch.getFileSystem().newWatchService();
 
@@ -231,28 +280,19 @@ public class FileManager {
 			// loop forever to watch directory
 			while (true) {
 				WatchKey watchKey;
-				watchKey = watchService.take(); // This call is blocking until events are present
-
-				// Create the list of path files
-				ArrayList<String> filesLog = new ArrayList<String>();
-				if(pathToWatch.toFile().exists()) {
-					File fList[] = pathToWatch.toFile().listFiles();
-					for (int i = 0; i < fList.length; i++) {
-						filesLog.add(fList[i].getName());
-					}
-				}
+				// This call is blocking until events are present
+				watchKey = watchService.take();
 
 				// Poll for file system events on the WatchKey
 				for (final WatchEvent<?> event : watchKey.pollEvents()) {
-					if(event.kind() == StandardWatchEventKinds.ENTRY_CREATE){
-						String relativePath = event.context().toString();
-						File newFile = new File(userDir, event.context().toString());
-						if(!newFile.isDirectory()) {
-							addToFileList(relativePath);
-							System.out.println("File Created! Added: " + relativePath);
-						}
-					}
-					//TODO Add for ENTRY_DELETE and for ENTRY_MODIFY
+					String path = '/' + event.context().toString().replace('\\', '/');
+					if(event.kind() == StandardWatchEventKinds.ENTRY_CREATE)
+						watcherCreatedFile(path); // .context().toString() == relative path.
+					else if(event.kind() == StandardWatchEventKinds.ENTRY_MODIFY)
+						watcherModifiedFile();
+					else if(event.kind() == StandardWatchEventKinds.ENTRY_DELETE)
+						watcherDeletedFile();
+					//TODO IMPLEMENT MODIFIED/DELETED
 				}
 
 				if(!watchKey.reset()) {
@@ -264,7 +304,8 @@ public class FileManager {
 			}
 
 		} catch (InterruptedException ex) {
-			System.out.println("Directory Watcher Thread interrupted, Closing.");
+			//El mafrod only happens at finalize AKA destructor.
+			System.out.println("Directory Watcher Thread interrupted, Closing now...");
 			return;
 		} catch (IOException ex) {
 			ex.printStackTrace();
@@ -282,7 +323,6 @@ public class FileManager {
 		fileList.add(path);
 	}
 
-
 	//SETTERS & GETTERS
 
 	public String getUserDir() {
@@ -299,5 +339,9 @@ public class FileManager {
 
 	public void setUsername(String username) {
 		this.username = username;
+	}
+
+	public Collection<String> getReceivedFiles() {
+		return receivedFiles;
 	}
 }
