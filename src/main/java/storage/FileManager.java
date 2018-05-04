@@ -4,10 +4,9 @@ import controllers.Helpers;
 import controllers.Node;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.channels.FileChannel;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
+import java.nio.file.*;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -29,7 +28,6 @@ public class FileManager {
 	public static String root = System.getProperty("user.dir") + "/Data";
 
 	public static String mainDir;
-
 	// Username of the current user, used to username the root directory
 	public String username;
 
@@ -47,6 +45,8 @@ public class FileManager {
 
 	private Node node;
 
+	private Thread watcherThread;
+
 	public FileManager(String username) {
 		this.username = username;
 		this.fileList = new ArrayList<>();
@@ -62,7 +62,7 @@ public class FileManager {
 			directory.mkdirs();
 
 		//populate fileLists.
-		scan();
+		commitChanges();
 	}
 
 	/**
@@ -86,7 +86,6 @@ public class FileManager {
 		ArrayList<String> fileList = (ArrayList<String>) Helpers.deserialize(data);
 		peerFileLists.put(peerUUID, fileList);
 		try {
-			//TODO decompose
 			sendFiles(peerUUID, compareWithPeer(peerUUID));
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -124,16 +123,16 @@ public class FileManager {
 		}
 	}
 
+
 	private void sendFiles(UUID peerUUID, List<String> filePaths){
 		for (String filePath : filePaths)
 			sendFile(peerUUID, filePath);
 	}
 
 	/**
-	 * When sync button is pressed.
+	 * Broadcast your fileList to all peers, by-which they're going to send you their last committed files.
 	 */
-	public void sync() {
-		scan();
+	public synchronized void sync() {
 		sendFileList();
 	}
 
@@ -141,12 +140,13 @@ public class FileManager {
 	 * Non-recursive function, scans the root directory for new files,
 	 * it currently feels the existence of files only, not the changes.
 	 */
-	private void scan() {
+	public synchronized void commitChanges() {
 		fileList.clear();
 		File file = new File(mainDir);
 
 		// Create the root directory if it doesn't exist
-		file.mkdir();
+		if(!file.exists())
+			file.mkdirs();
 
 		scan(file, "");
 	}
@@ -172,8 +172,8 @@ public class FileManager {
 		}
 	}
 
-	/*
-		Dev Utility to develop instances on the same PC.
+	/**
+	 * Dev Utility to develop instances on the same PC.
 	*/
 	public static void setRootDir(){
 		//DEV CODE
@@ -181,4 +181,53 @@ public class FileManager {
 		String directory = sc.nextLine();
 		root = System.getProperty("user.dir") + "/" + directory;
 	}
+
+	public void watchDirectoryPath(String pathString) {
+		File file = new File(pathString);
+		Path pathToWatch = file.toPath();
+		try {
+			WatchService watchService = pathToWatch.getFileSystem().newWatchService();
+			pathToWatch.register(watchService, StandardWatchEventKinds.ENTRY_CREATE,
+					StandardWatchEventKinds.ENTRY_MODIFY, StandardWatchEventKinds.ENTRY_DELETE);
+
+			// loop forever to watch directory
+			while (true) {
+				WatchKey watchKey;
+				watchKey = watchService.take(); // This call is blocking until events are present
+
+				// Create the list of path files
+				ArrayList<String> filesLog = new ArrayList<String>();
+				if(pathToWatch.toFile().exists()) {
+					File fList[] = pathToWatch.toFile().listFiles();
+					for (int i = 0; i < fList.length; i++) {
+						filesLog.add(fList[i].getName());
+					}
+				}
+
+				// Poll for file system events on the WatchKey
+				for (final WatchEvent<?> event : watchKey.pollEvents()) {
+					if(event.kind() == StandardWatchEventKinds.ENTRY_CREATE){
+						System.out.println("File Created!, Committing Changes...");
+						commitChanges();
+					}
+					//TODO Add for ENTRY_DELETE and for ENTRY_MODIFY
+				}
+
+				if(!watchKey.reset()) {
+					System.out.println("Path deleted");
+					watchKey.cancel();
+					watchService.close();
+					break;
+				}
+			}
+
+		} catch (InterruptedException ex) {
+			System.out.println("Directory Watcher Thread interrupted");
+			return;
+		} catch (IOException ex) {
+			ex.printStackTrace();  // Loggin framework
+			return;
+		}
+	}
+
 }
