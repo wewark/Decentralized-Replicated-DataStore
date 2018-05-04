@@ -75,3 +75,7 @@ hs_err_pid*
 
 .idea/workspace.xml
 /.idea/
+
+
+# Ignore Data Folders.
+/Data*/**
