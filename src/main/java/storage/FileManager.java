@@ -287,10 +287,16 @@ public class FileManager {
 	private void watcherModifiedFile() {
 	}
 
-	;
-
-	//TODO - Called when Directory watcher detects a file deletion
-	private void watcherDeletedFile() {
+	private void watcherDeletedFile(Path path) {
+		Path rootPath = Paths.get(userDir);                              // Replace to standardize URI(s) to UNIX uris.
+		String relativePath = '/' + rootPath.relativize(path).toString().replace('\\', '/');
+		File newFile = new File(userDir, relativePath);
+		if (!newFile.isDirectory()) {
+			//Save to files table.
+			removeFromFileList(relativePath);
+			System.out.println("Removed file: " + relativePath);
+			//TODO send a remove request to all other peers.
+		}
 	}
 
 	private void watchDirectoryPath(String pathString) throws IOException {
@@ -305,7 +311,7 @@ public class FileManager {
 					watcherModifiedFile();
 					break;
 				case DELETE:
-					watcherDeletedFile();
+					watcherDeletedFile(event.path());
 					break;
 			}
 		});
