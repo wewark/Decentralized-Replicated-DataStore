@@ -6,9 +6,7 @@ import de.tum.in.www1.jReto.connectivity.InTransfer;
 import de.tum.in.www1.jReto.connectivity.OutTransfer;
 import forms.MainForm;
 import storage.FileManager;
-import sun.applet.Main;
 
-import javax.swing.*;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
@@ -182,13 +180,16 @@ public class PeerConnection {
 
 		// When transfer ends, close the file channel
 		inTransfer.setOnEnd(t -> {
+
 			window.getProgress().setText("Received! File: " + filename);
+
 			try {
 				finalFileChannel.force(true);
 				finalFileChannel.close();
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
+
 		});
 	}
 

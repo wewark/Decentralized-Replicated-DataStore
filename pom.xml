@@ -24,6 +24,13 @@
     </repositories>
 
     <dependencies>
+
+        <dependency>
+            <groupId>io.methvin</groupId>
+            <artifactId>directory-watcher</artifactId>
+            <version>0.5.1</version>
+        </dependency>
+
     </dependencies>
 
 </project>
