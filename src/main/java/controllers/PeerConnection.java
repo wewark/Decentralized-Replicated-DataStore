@@ -4,8 +4,11 @@ import de.tum.in.www1.jReto.Connection;
 import de.tum.in.www1.jReto.RemotePeer;
 import de.tum.in.www1.jReto.connectivity.InTransfer;
 import de.tum.in.www1.jReto.connectivity.OutTransfer;
+import forms.MainForm;
 import storage.FileManager;
+import sun.applet.Main;
 
+import javax.swing.*;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
@@ -25,9 +28,13 @@ public class PeerConnection {
 	private Connection incomingConnection;
 	private Connection outGoingConnection;
 
+	//this is clean ? dunno am not much of a desktop developer.
+	private MainForm window;
 
-	public PeerConnection(RemotePeer remotePeer) {
+
+	public PeerConnection(RemotePeer remotePeer, MainForm window) {
 		this.remotePeer = remotePeer;
+		this.window = window;
 	}
 
 	public void connect() {
@@ -112,11 +119,14 @@ public class PeerConnection {
 				(position, length) -> Helpers.readData(fileChannel, position, length));
 
 		// Loading bar
+		window.getProgress().setText("Sending: " + filename);
+		window.getProgressBar().setValue(0);
 		transfer.setOnProgress(
-				t -> System.out.println("Progress: " + t.getProgress() + ", " + t.getLength()));
+				t -> window.getProgressBar().setValue((int) ((float)t.getProgress() / t.getLength() * 100)));
 
 		// When transfer ends, close the file channel
 		transfer.setOnEnd(t -> {
+			window.getProgress().setText("Sent! File: " + filename);
 			try {
 				fileChannel.force(true);
 				fileChannel.close();
@@ -161,12 +171,15 @@ public class PeerConnection {
 				(t, data) -> Helpers.writeData(finalFileChannel, data));
 
 		// Loading bar
+		window.getProgress().setText("Receiving: " + filename);
+		window.getProgressBar().setValue(0);
 		inTransfer.setOnProgress(
-				t -> System.out.println("Progress: " + t.getProgress() + ", " + t.getLength()));
+				t -> window.getProgressBar().setValue((int) ((float)t.getProgress() / t.getLength() * 100)));
 
 		// When transfer ends, close the file channel
 		inTransfer.setOnEnd(t -> {
 			try {
+				window.getProgress().setText("Received! File: " + filename);
 				finalFileChannel.force(true);
 				finalFileChannel.close();
 			} catch (IOException e) {

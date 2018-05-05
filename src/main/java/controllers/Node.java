@@ -3,6 +3,7 @@ import de.tum.in.www1.jReto.Connection;
 import de.tum.in.www1.jReto.LocalPeer;
 import de.tum.in.www1.jReto.RemotePeer;
 import de.tum.in.www1.jReto.module.wlan.WlanModule;
+import forms.MainForm;
 import storage.FileManager;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
@@ -15,11 +16,7 @@ import java.util.concurrent.Executors;
 
 public class Node {
 	private static Node ourInstance = new Node();
-
-	public static Node getInstance() {
-		return ourInstance;
-	}
-
+	public FileManager fileManager;
 	private WlanModule wlanModule;
 
 	private LocalPeer localPeer;
@@ -32,14 +29,17 @@ public class Node {
 
 	// Maps each username to its corresponding online remote peers
 	private HashMap<String, ArrayList<RemotePeer>> remotePeers = new HashMap<>();
+	// Username of the user currently logged in
+	private String username = "guest username";
+	private MainForm nodeFormWindow;
+	// A "function" that's is invoked to update GUI
+	private Callable<Void> updateUserList;
 
 	private Node() {}
 
-	// Username of the user currently logged in
-	private String username = "guest username";
-
-	public FileManager fileManager;
-
+	public static Node getInstance() {
+		return ourInstance;
+	}
 
 	public void login(String username) {
 		this.username = username;
@@ -71,7 +71,8 @@ public class Node {
 		UUID peerUUID = discoveredPeer.getUniqueIdentifier();
 
 		if (!connections.containsKey(peerUUID))
-			connections.put(peerUUID, new PeerConnection(discoveredPeer));
+			connections.put(peerUUID, new PeerConnection(discoveredPeer, nodeFormWindow));
+
 		connections.get(peerUUID).connect();
 
 		sendMyUsername(discoveredPeer);
@@ -106,7 +107,8 @@ public class Node {
 		System.out.println("Received incoming connection: " + incomingConnection + " from peer: " + peerUUID);
 
 		if (!connections.containsKey(peerUUID))
-			connections.put(peerUUID, new PeerConnection(peer));
+			connections.put(peerUUID, new PeerConnection(peer, nodeFormWindow));
+
 		connections.get(peerUUID).setIncomingConnection(incomingConnection);
 	}
 
@@ -157,10 +159,6 @@ public class Node {
 
 		sendData(peer, bytes);
 	}
-
-
-	// A "function" that's is invoked to update GUI
-	private Callable<Void> updateUserList;
 
 	public void setUpdateUserList(Callable<Void> updateUserList) {
 		this.updateUserList = updateUserList;
@@ -226,5 +224,13 @@ public class Node {
 
 	public HashMap<String, ArrayList<RemotePeer>> getRemotePeers() {
 		return remotePeers;
+	}
+
+	public MainForm getNodeFormWindow() {
+		return nodeFormWindow;
+	}
+
+	public void setNodeFormWindow(MainForm nodeFormWindow) {
+		this.nodeFormWindow = nodeFormWindow;
 	}
 }

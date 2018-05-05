@@ -9,7 +9,8 @@ public class MainForm extends JFrame {
 	private JPanel panel1;
 	private JButton syncButton;
 	private JButton checkoutButton;
-
+	private JProgressBar progressBar;
+	private JTextField progress;
 	private Node node = Node.getInstance();
 
 	DefaultListModel listModel = new DefaultListModel();
@@ -17,6 +18,8 @@ public class MainForm extends JFrame {
 	MainForm() {
 		setContentPane(panel1);
 		userList.setModel(listModel);
+
+		node.setNodeFormWindow(this);
 
 		node.setUpdateUserList(() -> {
 			updateUserList();
@@ -35,4 +38,13 @@ public class MainForm extends JFrame {
 		for (String username : users)
 			listModel.addElement(username);
 	}
+
+	public JProgressBar getProgressBar() {
+		return progressBar;
+	}
+
+	public JTextField getProgress() {
+		return progress;
+	}
+
 }
