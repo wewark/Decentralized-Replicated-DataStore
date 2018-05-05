@@ -75,6 +75,10 @@ public class PeerConnection {
 			case 2:
 				String filename = new String(bytes);
 
+				//CHECK IF ALREADY RECEIVED BY ANOTHER PEER
+				if(fileManager.getFileList().contains(filename))
+					break;
+
 				//Add files received via network to this list (so it won't be re-broadcast-ed by the watcher).
 				fileManager.getReceivedFiles().add(filename);
 
@@ -178,8 +182,8 @@ public class PeerConnection {
 
 		// When transfer ends, close the file channel
 		inTransfer.setOnEnd(t -> {
+			window.getProgress().setText("Received! File: " + filename);
 			try {
-				window.getProgress().setText("Received! File: " + filename);
 				finalFileChannel.force(true);
 				finalFileChannel.close();
 			} catch (IOException e) {

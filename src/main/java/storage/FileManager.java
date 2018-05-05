@@ -344,4 +344,8 @@ public class FileManager {
 	public Collection<String> getReceivedFiles() {
 		return receivedFiles;
 	}
+
+	public Collection<String> getFileList() {
+		return fileList;
+	}
 }
